@@ -16,3 +16,13 @@ func Bind(instance interface{}) {
 func BindWithAlias(instance interface{}, alias string) {
 	root.BindWithAlias(instance, alias)
 }
+
+// Resolve ...
+func Resolve(receiver interface{}) error {
+	return root.Resolve(receiver)
+}
+
+// ResolveWithAlias ...
+func ResolveWithAlias(receiver interface{}, alias string) error {
+	return root.ResolveWithAlias(receiver, alias)
+}

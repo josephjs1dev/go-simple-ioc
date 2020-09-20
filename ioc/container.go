@@ -1,8 +1,14 @@
 package ioc
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
+)
+
+var (
+	ErrNotRegistered = errors.New("information is not registered to container")
+	ErrAliasNotKnown = errors.New("alias is not known")
 )
 
 // Container ...
@@ -43,12 +49,8 @@ func (c *container) bind(instance interface{}, alias string) {
 		panic("instance must not be a function")
 	}
 
-	if instanceType.Kind() == reflect.Ptr {
-		instanceType = instanceType.Elem()
-	}
-
+	instanceType = instanceType.Elem()
 	label := fmt.Sprintf("%s.%s", instanceType.PkgPath(), instanceType.Name())
-
 	binderLabel := "default"
 	if alias != "" {
 		binderLabel = alias
@@ -84,18 +86,53 @@ func (c *container) bindFunc(resolver interface{}, meta interface{}, singleton b
 
 func (c *container) BindSingleton(resolver interface{}, meta interface{}) {}
 
-func (c *container) BindSingletonWithAlias(resolver interface{}, meta interface{}, alias string) {
+func (c *container) BindSingletonWithAlias(resolver interface{}, meta interface{}, alias string) {}
 
+func (c *container) BindTransient(resolver interface{}, meta interface{}) {}
+
+func (c *container) BindTransientWithAlias(resolver interface{}, meta interface{}, alias string) {}
+
+func (c *container) getBinder(label, binderLabel string) (*binder, error) {
+	binderMap, ok := c.cnt[label]
+	if !ok {
+		return nil, ErrNotRegistered
+	}
+
+	binder, ok := binderMap[binderLabel]
+	if !ok {
+		return nil, ErrAliasNotKnown
+	}
+
+	return &binder, nil
 }
 
-func (c *container) BindTransient() {}
+func (c *container) resolve(receiver interface{}, alias string) (err error) {
+	receiverType := reflect.TypeOf(receiver).Elem()
+	label := fmt.Sprintf("%s.%s", receiverType.PkgPath(), receiverType.Name())
+	binderLabel := "default"
+	if alias != "" {
+		binderLabel = alias
+	}
 
-func (c *container) Resolve(instance interface{}) (err error) {
+	binder, err := c.getBinder(label, binderLabel)
+	if err != nil {
+		return err
+	}
+
+	if binder.instance != nil {
+		receiverValue := reflect.ValueOf(receiver).Elem()
+		receiverValue.Set(reflect.ValueOf(binder.instance).Elem())
+
+		return nil
+	}
 
 	return nil
 }
 
-func (c *container) ResolveWithAlias(instance interface{}, alias string) (err error) {
+func (c *container) Resolve(receiver interface{}) (err error) {
+	return c.resolve(receiver, "")
+}
 
-	return nil
+func (c *container) ResolveWithAlias(receiver interface{}, alias string) (err error) {
+	return c.resolve(receiver, alias)
 }
