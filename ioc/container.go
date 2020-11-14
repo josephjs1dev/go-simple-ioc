@@ -8,6 +8,7 @@ import (
 )
 
 const structTag = "ioc"
+const defaultAlias = "default"
 
 var (
 	ErrNotRegistered             = errors.New("information is not registered to container")
@@ -19,10 +20,12 @@ var (
 type Container interface {
 	MustBind(instance interface{})
 	MustBindWithAlias(instance interface{}, alias string)
+	MustBindSingleton(resolver interface{}, meta interface{})
+	MustBindSingletonWithAlias(resolver interface{}, meta interface{}, alias string)
+	MustBindTransient(resolver interface{}, meta interface{})
+	MustBindTransientWithAlias(resolver interface{}, meta interface{}, alias string)
 	Resolve(instance interface{}) (err error)
 	ResolveWithAlias(instance interface{}, alias string) (err error)
-	MustBindSingleton(resolver interface{}, meta interface{})
-	MustBindTransient(resolver interface{}, meta interface{})
 }
 
 type binder struct {
@@ -38,7 +41,7 @@ type binder struct {
 	dependencies [][2]string
 }
 
-type binderMap map[string]binder
+type binderMap map[string]*binder
 
 // Implementation of Container interface.
 type container struct {
@@ -50,14 +53,6 @@ type container struct {
 
 func getLabel(p reflect.Type) string {
 	return p.String()
-}
-
-func getBinderLabel(override string) string {
-	if override != "" {
-		return override
-	}
-
-	return "default"
 }
 
 func resolveTypePtrNonFunc(instance interface{}) (reflect.Type, error) {
@@ -82,12 +77,10 @@ func (c *container) bind(instance interface{}, alias string) error {
 	}
 
 	label := getLabel(instanceType)
-	binderLabel := getBinderLabel(alias)
-
 	if v, ok := c.cnt[label]; !ok {
-		c.cnt[label] = map[string]binder{binderLabel: {isSingleton: true, instance: instance}}
+		c.cnt[label] = binderMap{alias: {isSingleton: true, instance: instance}}
 	} else {
-		v[binderLabel] = binder{isSingleton: true, instance: instance}
+		v[alias] = &binder{isSingleton: true, instance: instance}
 	}
 
 	return nil
@@ -95,7 +88,7 @@ func (c *container) bind(instance interface{}, alias string) error {
 
 // MustBind does the binding of actual object (struct, not interface) without any alias.
 func (c *container) MustBind(instance interface{}) {
-	if err := c.bind(instance, ""); err != nil {
+	if err := c.bind(instance, defaultAlias); err != nil {
 		panic(err)
 	}
 }
@@ -110,7 +103,7 @@ func (c *container) MustBindWithAlias(instance interface{}, alias string) {
 func getDependencies(resolverType reflect.Type, instanceType reflect.Type) [][2]string {
 	dependencyLabelMap := map[string]int{}
 	for idx := 0; idx < resolverType.NumIn(); idx++ {
-		paramType := resolverType.In(0)
+		paramType := resolverType.In(idx)
 		dependencyLabelMap[getLabel(paramType)] = idx
 	}
 
@@ -118,7 +111,6 @@ func getDependencies(resolverType reflect.Type, instanceType reflect.Type) [][2]
 	for idx := 0; idx < instanceType.NumField(); idx++ {
 		field := instanceType.Field(idx)
 		label := getLabel(field.Type)
-
 		inIdx, ok := dependencyLabelMap[label]
 		if !ok {
 			continue
@@ -126,7 +118,7 @@ func getDependencies(resolverType reflect.Type, instanceType reflect.Type) [][2]
 
 		tag, ok := field.Tag.Lookup(structTag)
 		if !ok || tag != "" {
-			tag = "default"
+			tag = defaultAlias
 		}
 
 		v := strings.Split(tag, ",")
@@ -148,6 +140,10 @@ func (c *container) bindFunc(resolver interface{}, meta interface{}, isSingleton
 
 	instanceType := resolverType.Out(0)
 	label := getLabel(instanceType)
+
+	if instanceType.Kind() == reflect.Ptr {
+		instanceType = instanceType.Elem()
+	}
 	if meta != nil && instanceType.Kind() == reflect.Interface {
 		metaType := reflect.TypeOf(meta)
 		if metaType.Kind() != reflect.Ptr {
@@ -161,14 +157,12 @@ func (c *container) bindFunc(resolver interface{}, meta interface{}, isSingleton
 	}
 
 	dependencies := getDependencies(resolverType, instanceType)
-	binderLabel := getBinderLabel(alias)
-
 	if v, ok := c.cnt[label]; !ok {
 		c.cnt[label] = binderMap{
-			binderLabel: {isSingleton: isSingleton, resolver: resolver, meta: meta, dependencies: dependencies},
+			alias: {isSingleton: isSingleton, resolver: resolver, meta: meta, dependencies: dependencies},
 		}
 	} else {
-		v[binderLabel] = binder{isSingleton: isSingleton, resolver: resolver, meta: meta, dependencies: dependencies}
+		v[alias] = &binder{isSingleton: isSingleton, resolver: resolver, meta: meta, dependencies: dependencies}
 	}
 
 	return nil
@@ -181,7 +175,7 @@ func (c *container) mustBindFunc(resolver interface{}, meta interface{}, isSingl
 }
 
 func (c *container) MustBindSingleton(resolver interface{}, meta interface{}) {
-	c.mustBindFunc(resolver, meta, true, "")
+	c.mustBindFunc(resolver, meta, true, defaultAlias)
 }
 
 func (c *container) MustBindSingletonWithAlias(resolver interface{}, meta interface{}, alias string) {
@@ -189,7 +183,7 @@ func (c *container) MustBindSingletonWithAlias(resolver interface{}, meta interf
 }
 
 func (c *container) MustBindTransient(resolver interface{}, meta interface{}) {
-	c.mustBindFunc(resolver, meta, false, "")
+	c.mustBindFunc(resolver, meta, false, defaultAlias)
 }
 
 func (c *container) MustBindTransientWithAlias(resolver interface{}, meta interface{}, alias string) {
@@ -207,37 +201,59 @@ func (c *container) getBinder(label, binderLabel string) (*binder, error) {
 		return nil, ErrAliasNotKnown
 	}
 
-	return &binder, nil
+	return binder, nil
 }
 
-func (c *container) resolve(receiver interface{}, alias string) (err error) {
+func (c *container) resolve(receiver interface{}, label, alias string) (err error) {
 	receiverType, err := resolveTypePtrNonFunc(receiver)
 	if err != nil {
 		return err
 	}
 
-	label := getLabel(receiverType)
-	binderLabel := getBinderLabel(alias)
-
-	binder, err := c.getBinder(label, binderLabel)
+	if label == "" {
+		label = getLabel(receiverType)
+	}
+	binder, err := c.getBinder(label, alias)
 	if err != nil {
 		return err
 	}
 
+	receiverValue := reflect.ValueOf(receiver).Elem()
 	if binder.instance != nil {
-		receiverValue := reflect.ValueOf(receiver).Elem()
 		receiverValue.Set(reflect.ValueOf(binder.instance).Elem())
 
 		return nil
+	}
+
+	resolverType := reflect.TypeOf(binder.resolver)
+	in := make([]reflect.Value, 0)
+	for idx := 0; idx < resolverType.NumIn(); idx++ {
+		paramType := resolverType.In(idx)
+		paramValue := reflect.New(paramType)
+		iParamValue := paramValue.Interface()
+
+		dependency := binder.dependencies[idx]
+		if err := c.resolve(&iParamValue, dependency[0], dependency[1]); err != nil {
+			return fmt.Errorf("failed to resolve inner dependencies: %w", err)
+		}
+
+		in = append(in, reflect.ValueOf(iParamValue))
+	}
+
+	resolverValue := reflect.ValueOf(binder.resolver)
+	receiverValue.Set(resolverValue.Call(in)[0])
+
+	if binder.isSingleton {
+		binder.instance = reflect.ValueOf(receiver).Interface()
 	}
 
 	return nil
 }
 
 func (c *container) Resolve(receiver interface{}) (err error) {
-	return c.resolve(receiver, "")
+	return c.resolve(receiver, "", defaultAlias)
 }
 
 func (c *container) ResolveWithAlias(receiver interface{}, alias string) (err error) {
-	return c.resolve(receiver, alias)
+	return c.resolve(receiver, "", alias)
 }
