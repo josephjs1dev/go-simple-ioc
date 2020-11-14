@@ -108,18 +108,19 @@ func (c *container) MustBindWithAlias(instance interface{}, alias string) {
 }
 
 func getDependencies(resolverType reflect.Type, instanceType reflect.Type) [][2]string {
-	var dependencies [][2]string
-
-	dependencyLabelMap := map[string]bool{}
+	dependencyLabelMap := map[string]int{}
 	for idx := 0; idx < resolverType.NumIn(); idx++ {
 		paramType := resolverType.In(0)
-		dependencyLabelMap[getLabel(paramType)] = true
+		dependencyLabelMap[getLabel(paramType)] = idx
 	}
 
+	dependencies := make([][2]string, resolverType.NumIn())
 	for idx := 0; idx < instanceType.NumField(); idx++ {
 		field := instanceType.Field(idx)
 		label := getLabel(field.Type)
-		if !dependencyLabelMap[label] {
+
+		inIdx, ok := dependencyLabelMap[label]
+		if !ok {
 			continue
 		}
 
@@ -129,7 +130,7 @@ func getDependencies(resolverType reflect.Type, instanceType reflect.Type) [][2]
 		}
 
 		v := strings.Split(tag, ",")
-		dependencies = append(dependencies, [2]string{label, v[0]})
+		dependencies[inIdx] = [2]string{label, v[0]}
 	}
 
 	return dependencies

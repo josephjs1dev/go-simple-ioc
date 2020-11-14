@@ -1,2 +1,2 @@
 # go-simple-ioc
-Simple IOC Container for Golang
+Simple IoC Container for Golang
