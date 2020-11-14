@@ -1,20 +1,33 @@
 package ioc
 
-var root Container = &container{cnt: map[string]map[string]binder{}}
+var root Container = &container{cnt: map[string]binderMap{}}
 
 // CreateContainer ...
 func CreateContainer() Container {
-	return &container{cnt: map[string]map[string]binder{}}
+	return &container{cnt: map[string]binderMap{}}
 }
 
-// Bind ...
-func Bind(instance interface{}) {
-	root.Bind(instance)
+// TestGetCnt only for testing!
+func TestGetCnt() map[string]binderMap {
+	return root.(*container).cnt
 }
 
-// BindWithAlias ...
-func BindWithAlias(instance interface{}, alias string) {
-	root.BindWithAlias(instance, alias)
+// MustBind ...
+func MustBind(instance interface{}) {
+	root.MustBind(instance)
+}
+
+// MustBindWithAlias ...
+func MustBindWithAlias(instance interface{}, alias string) {
+	root.MustBindWithAlias(instance, alias)
+}
+
+func MustBindSingleton(resolver interface{}, meta interface{}) {
+	root.MustBindSingleton(resolver, meta)
+}
+
+func MustBindTransient(resolver interface{}, meta interface{}) {
+	root.MustBindTransient(resolver, meta)
 }
 
 // Resolve ...
