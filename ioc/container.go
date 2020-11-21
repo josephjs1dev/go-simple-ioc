@@ -16,8 +16,9 @@ var (
 	ErrInstanceMustNotBeFunction = errors.New("instance must not be a function")
 )
 
-// Container ...
+// Container provides utility functions to bind and resolve.
 type Container interface {
+	Clear()
 	MustBind(instance interface{})
 	MustBindWithAlias(instance interface{}, alias string)
 	MustBindSingleton(resolver interface{}, meta interface{})
@@ -51,6 +52,11 @@ type container struct {
 	cnt map[string]binderMap
 }
 
+// CreateContainer creates new struct that implements Container interface.
+func CreateContainer() Container {
+	return &container{cnt: map[string]binderMap{}}
+}
+
 func getLabel(p reflect.Type) string {
 	return p.String()
 }
@@ -68,6 +74,10 @@ func resolveTypePtrNonFunc(instance interface{}) (reflect.Type, error) {
 	}
 
 	return instanceType, nil
+}
+
+func (c *container) Clear() {
+	c.cnt = map[string]binderMap{}
 }
 
 func (c *container) bind(instance interface{}, alias string) error {
@@ -117,7 +127,7 @@ func getDependencies(resolverType reflect.Type, instanceType reflect.Type) [][2]
 		}
 
 		tag, ok := field.Tag.Lookup(structTag)
-		if !ok || tag != "" {
+		if !ok || tag == "" {
 			tag = defaultAlias
 		}
 
@@ -139,6 +149,10 @@ func (c *container) bindFunc(resolver interface{}, meta interface{}, isSingleton
 	}
 
 	instanceType := resolverType.Out(0)
+	if instanceType.Kind() != reflect.Ptr && instanceType.Kind() != reflect.Interface {
+		return fmt.Errorf("expected pointer or interface, but instead got %v", instanceType)
+	}
+
 	label := getLabel(instanceType)
 
 	if instanceType.Kind() == reflect.Ptr {
@@ -229,15 +243,14 @@ func (c *container) resolve(receiver interface{}, label, alias string) (err erro
 	in := make([]reflect.Value, 0)
 	for idx := 0; idx < resolverType.NumIn(); idx++ {
 		paramType := resolverType.In(idx)
-		paramValue := reflect.New(paramType)
-		iParamValue := paramValue.Interface()
+		paramValue := reflect.New(paramType).Interface()
 
 		dependency := binder.dependencies[idx]
-		if err := c.resolve(&iParamValue, dependency[0], dependency[1]); err != nil {
+		if err := c.resolve(&paramValue, dependency[0], dependency[1]); err != nil {
 			return fmt.Errorf("failed to resolve inner dependencies: %w", err)
 		}
 
-		in = append(in, reflect.ValueOf(iParamValue))
+		in = append(in, reflect.ValueOf(paramValue))
 	}
 
 	resolverValue := reflect.ValueOf(binder.resolver)
