@@ -56,7 +56,7 @@ func testContainerMustResolveWithAlias(t *testing.T, cnt Container, v interface{
 }
 
 func TestContainer_MustBind(t *testing.T) {
-	t.Run("bind not pointer", func(t *testing.T) {
+	t.Run("bind non-pointer as parameter", func(t *testing.T) {
 		defer checkMustPanic(t)
 
 		cnt := CreateContainer()
@@ -67,7 +67,8 @@ func TestContainer_MustBind(t *testing.T) {
 		defer checkMustPanic(t)
 
 		cnt := CreateContainer()
-		cnt.MustBind(func() {})
+		fnc := func() {}
+		cnt.MustBind(&fnc)
 	})
 
 	t.Run("bind non-pointer struct", func(t *testing.T) {
@@ -123,7 +124,8 @@ func TestContainer_MustBindWithAlias(t *testing.T) {
 		defer checkMustPanic(t)
 
 		cnt := CreateContainer()
-		cnt.MustBindWithAlias(testStruct{}, "panic")
+		fnc := func() {}
+		cnt.MustBindWithAlias(&fnc, "panic")
 	})
 
 	t.Run("bind pointer struct with alias", func(t *testing.T) {
@@ -160,13 +162,31 @@ func TestContainer_MustBindSingleton(t *testing.T) {
 		cnt.MustBindSingleton(func() {}, nil)
 	})
 
-	t.Run("bind singleton with resolver return non pointer or non interface", func(t *testing.T) {
+	t.Run("bind singleton resolver return non pointer or non interface", func(t *testing.T) {
 		defer checkMustPanic(t)
 
 		cnt := CreateContainer()
 		cnt.MustBindSingleton(func(bound *testStruct) dTestStruct {
 			return dTestStruct{testStruct: bound}
 		}, nil)
+	})
+
+	t.Run("bind singleton meta not pointer", func(t *testing.T) {
+		defer checkMustPanic(t)
+
+		cnt := CreateContainer()
+		cnt.MustBindSingleton(func(bound *testStruct) dTestInterface {
+			return &dTestTagStruct{testStruct: bound}
+		}, dTestTagStruct{})
+	})
+
+	t.Run("bind singleton meta not implements interface", func(t *testing.T) {
+		defer checkMustPanic(t)
+
+		cnt := CreateContainer()
+		cnt.MustBindSingleton(func(bound *testStruct) dTestInterface {
+			return &dTestTagStruct{testStruct: bound}
+		}, &testStruct{})
 	})
 
 	t.Run("bind singleton pointer struct", func(t *testing.T) {
