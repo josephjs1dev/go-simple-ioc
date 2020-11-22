@@ -2,40 +2,47 @@ package ioc
 
 var root = CreateContainer()
 
-// Clear clears root / default container internal data.
+// Clear calls root Clear method.
 func Clear() {
 	root.Clear()
 }
 
-// MustBind binds given instance to container and will panic if failed to bind.
+// MustBind calls root MustBind method.
 func MustBind(instance interface{}) {
 	root.MustBind(instance)
 }
 
-// MustBindWithAlias binds given instance to container with alias and will panic if failed to bind.
+// MustBindWithAlias calls root MustBindWithAlias method.
 func MustBindWithAlias(instance interface{}, alias string) {
 	root.MustBindWithAlias(instance, alias)
 }
 
-// MustBindSingleton binds given resolver function and metadata information to container with singleton flag.
-// As it is singleton, after first resolve, container will save resolved information and immediately returns data
-// for next resolve.
+// MustBindSingleton calls root MustBindSingleton method.
 func MustBindSingleton(resolver interface{}, meta interface{}) {
 	root.MustBindSingleton(resolver, meta)
 }
 
-// MustBindTransient binds given resolver function and metadata information to container without singleton flag.
-// Each resolve will create new object.
+// MustBindSingletonWithAlias calls root MustBindSingletonWithAlias method.
+func MustBindSingletonWithAlias(resolver interface{}, meta interface{}, alias string) {
+	root.MustBindSingletonWithAlias(resolver, meta, alias)
+}
+
+// MustBindTransient calls root MustBindTransient method.
 func MustBindTransient(resolver interface{}, meta interface{}) {
 	root.MustBindTransient(resolver, meta)
 }
 
-// Resolve resolves given receiver to appropriate bound data in container.
+// MustBindTransientWithAlias calls root MustBindTransientWithAlias method.
+func MustBindTransientWithAlias(resolver interface{}, meta interface{}, alias string) {
+	root.MustBindTransientWithAlias(resolver, meta, alias)
+}
+
+// Resolve calls root Resolve method.
 func Resolve(receiver interface{}) error {
 	return root.Resolve(receiver)
 }
 
-// ResolveWithAlias resolves given receiver and alias to appropriate bound data in container.
+// ResolveWithAlias calls root ResolveWithAlias method.
 func ResolveWithAlias(receiver interface{}, alias string) error {
 	return root.ResolveWithAlias(receiver, alias)
 }

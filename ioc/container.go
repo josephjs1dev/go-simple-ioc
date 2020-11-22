@@ -76,6 +76,8 @@ func resolveTypePtrNonFunc(instance interface{}) (reflect.Type, error) {
 	return instanceType, nil
 }
 
+// Clear clears root / default container internal data.
+// Does not handles multiple threads.
 func (c *container) Clear() {
 	c.cnt = map[string]binderMap{}
 }
@@ -97,6 +99,7 @@ func (c *container) bind(instance interface{}, alias string) error {
 }
 
 // MustBind does the binding of actual object (struct, not interface) without any alias.
+// This method only accepts struct or interface and will panic if failed to bind given parameter.
 func (c *container) MustBind(instance interface{}) {
 	if err := c.bind(instance, defaultAlias); err != nil {
 		panic(err)
@@ -104,6 +107,7 @@ func (c *container) MustBind(instance interface{}) {
 }
 
 // MustBindWithAlias does the binding of actual object (struct, not interface) but with an alias.
+// Same behaviour with MustBind but save information with alias.
 func (c *container) MustBindWithAlias(instance interface{}, alias string) {
 	if err := c.bind(instance, alias); err != nil {
 		panic(err)
@@ -188,18 +192,31 @@ func (c *container) mustBindFunc(resolver interface{}, meta interface{}, isSingl
 	}
 }
 
+// MustBindSingleton binds given resolver function and metadata information to container with singleton flag.
+// As it is singleton, after first resolve, container will save resolved information and immediately returns data
+// for next resolve.
+// Resolver must be a function that returns interface or pointer struct and meta can be nil or must implements
+// returned interface type from resolver.
 func (c *container) MustBindSingleton(resolver interface{}, meta interface{}) {
 	c.mustBindFunc(resolver, meta, true, defaultAlias)
 }
 
+// MustBindSingletonWithAlias binds given resolver function and metadata information to container with singleton flag and alias name.
+// Same behaviour with MustBindSingleton but save information with alias.
 func (c *container) MustBindSingletonWithAlias(resolver interface{}, meta interface{}, alias string) {
 	c.mustBindFunc(resolver, meta, true, alias)
 }
 
+// MustBindTransient binds given resolver function and metadata information to container without singleton flag.
+// Each resolve will create new object.
+// Resolver must be a function that returns interface or pointer struct and meta can be nil or must implements
+// returned interface type from resolver.
 func (c *container) MustBindTransient(resolver interface{}, meta interface{}) {
 	c.mustBindFunc(resolver, meta, false, defaultAlias)
 }
 
+// MustBindTransientWithAlias binds given resolver function and metadata information to container without singleton flag and alias name.
+// Same behaviour with MustBindTransient but save information with alias.
 func (c *container) MustBindTransientWithAlias(resolver interface{}, meta interface{}, alias string) {
 	c.mustBindFunc(resolver, meta, false, alias)
 }
@@ -263,10 +280,14 @@ func (c *container) resolve(receiver interface{}, label, alias string) (err erro
 	return nil
 }
 
+// Resolve resolves given receiver to appropriate bound information in container.
+// Will returns ErrNotRegistered, ErrAliasNotKnown, or any relevant errors if failed to resolve.
 func (c *container) Resolve(receiver interface{}) (err error) {
 	return c.resolve(receiver, "", defaultAlias)
 }
 
+// ResolveWithAlias resolves given receiver and alias to appropriate bound information in container.
+// Same behaviour with Resolve.
 func (c *container) ResolveWithAlias(receiver interface{}, alias string) (err error) {
 	return c.resolve(receiver, "", alias)
 }
