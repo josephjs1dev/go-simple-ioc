@@ -66,6 +66,9 @@ func main() {
 
 	// The variable will be filled with userService instance.
 	if v, ok := s.(*userService); ok {
-		log.Printf("%+v", v)
+		log.Printf("actual implementation: %+v\n", v)
 	}
+
+	u, _ := s.FetchProfile(0)
+	log.Printf("user: %+v\n", u)
 }
