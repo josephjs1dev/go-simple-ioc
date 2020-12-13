@@ -134,9 +134,15 @@ func getDependencies(resolverType reflect.Type, instanceType reflect.Type) [][2]
 		if !ok || tag == "" {
 			tag = defaultAlias
 		}
+		delete(dependencyLabelMap, label)
 
 		v := strings.Split(tag, ",")
 		dependencies[inIdx] = [2]string{label, v[0]}
+	}
+
+	// Leftover will be set to default
+	for label, inIdx := range dependencyLabelMap {
+		dependencies[inIdx] = [2]string{label, defaultAlias}
 	}
 
 	return dependencies

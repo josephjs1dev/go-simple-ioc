@@ -49,6 +49,11 @@ Example can be seen in: [here](./examples/bind_singleton).
 
 Bind transient is like bind singleton, except for each resolve call, it will create a new instance.
 
+## Caveat
+
+1. Can't bind object with circular dependencies.
+2. It uses reflection so may cause slower when serving request. Best to use when initialization.
+
 ## Want to contribute?
 Feel free to clone this repository and create PR! 😁😁
 

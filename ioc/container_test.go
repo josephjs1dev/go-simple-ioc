@@ -225,6 +225,28 @@ func TestContainer_MustBindSingleton(t *testing.T) {
 		testContainerMustResolve(t, cnt, &firstDTest)
 		assert.Equal(t, boundStruct, firstDTest.(*dTestTagStruct).testStruct)
 	})
+
+	t.Run("bind singleton with dependencies outside internal property", func(t *testing.T) {
+		cnt := CreateContainer()
+
+		type outsideStruct struct {
+			internalProps string
+		}
+
+		var boundStruct = &testStruct{intProp: 1}
+		var o = &outsideStruct{internalProps: "test"}
+		cnt.MustBind(&o)
+		cnt.MustBindWithAlias(&boundStruct, "test")
+		cnt.MustBindSingleton(func(bound *testStruct, o *outsideStruct) dTestInterface {
+			assert.Equal(t, o.internalProps, "test")
+
+			return &dTestTagStruct{testStruct: bound}
+		}, &dTestTagStruct{})
+
+		var firstDTest dTestInterface
+		testContainerMustResolve(t, cnt, &firstDTest)
+		assert.Equal(t, boundStruct, firstDTest.(*dTestTagStruct).testStruct)
+	})
 }
 
 func TestContainer_MustBindSingletonWithAlias(t *testing.T) {
