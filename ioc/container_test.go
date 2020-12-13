@@ -1,6 +1,7 @@
 package ioc
 
 import (
+	"errors"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -188,7 +189,7 @@ func TestContainer_MustBindSingleton(t *testing.T) {
 
 		var secondTest dTestInterface
 		if err := cnt.Resolve(&secondTest, WithResolveAlias("no_alias")); err != nil {
-			assert.Equal(t, ErrAliasNotKnown, err)
+			assert.True(t, errors.Is(err, ErrAliasNotKnown))
 		} else {
 			t.Fatalf("should be failed to resolve")
 		}
@@ -272,7 +273,7 @@ func TestContainer_MustBindTransient(t *testing.T) {
 
 		var secondTest dTestInterface
 		if err := cnt.Resolve(&secondTest, WithResolveAlias("no_alias")); err != nil {
-			assert.Equal(t, ErrAliasNotKnown, err)
+			assert.True(t, errors.Is(err, ErrAliasNotKnown))
 		} else {
 			t.Fatalf("should be failed to resolve")
 		}

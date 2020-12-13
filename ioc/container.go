@@ -239,12 +239,13 @@ func (c *container) MustBindTransient(resolver interface{}, opts ...BindOption) 
 func (c *container) getBinder(label, binderLabel string) (*binder, error) {
 	binderMap, ok := c.cnt[label]
 	if !ok {
-		return nil, ErrNotRegistered
+		return nil, fmt.Errorf("can't find dependencies from label %v, err: %w", label, ErrNotRegistered)
 	}
 
 	binder, ok := binderMap[binderLabel]
 	if !ok {
-		return nil, ErrAliasNotKnown
+		return nil, fmt.Errorf("can't find dependencies from label %v with alias %v, err: %w",
+			label, binderLabel, ErrAliasNotKnown)
 	}
 
 	return binder, nil
@@ -285,7 +286,7 @@ func (c *container) resolve(receiver interface{}, label string, opt *resolveOpti
 
 		dependency := binder.dependencies[idx]
 		if err := c.resolve(&paramValue, dependency[0], &resolveOption{alias: dependency[1]}); err != nil {
-			return fmt.Errorf("failed to resolve inner label %v with alias %v: %w", dependency[0], dependency[1], err)
+			return err
 		}
 
 		in = append(in, reflect.ValueOf(paramValue))
