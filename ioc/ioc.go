@@ -7,42 +7,22 @@ func Clear() {
 	root.Clear()
 }
 
-// MustBind calls root MustBind method.
-func MustBind(instance interface{}) {
-	root.MustBind(instance)
-}
-
-// MustBindWithAlias calls root MustBindWithAlias method.
-func MustBindWithAlias(instance interface{}, alias string) {
-	root.MustBindWithAlias(instance, alias)
-}
-
 // MustBindSingleton calls root MustBindSingleton method.
-func MustBindSingleton(resolver interface{}, meta interface{}) {
-	root.MustBindSingleton(resolver, meta)
-}
-
-// MustBindSingletonWithAlias calls root MustBindSingletonWithAlias method.
-func MustBindSingletonWithAlias(resolver interface{}, meta interface{}, alias string) {
-	root.MustBindSingletonWithAlias(resolver, meta, alias)
+func MustBindSingleton(resolver interface{}, opts ...BindOption) {
+	root.MustBindSingleton(resolver, opts...)
 }
 
 // MustBindTransient calls root MustBindTransient method.
-func MustBindTransient(resolver interface{}, meta interface{}) {
-	root.MustBindTransient(resolver, meta)
-}
-
-// MustBindTransientWithAlias calls root MustBindTransientWithAlias method.
-func MustBindTransientWithAlias(resolver interface{}, meta interface{}, alias string) {
-	root.MustBindTransientWithAlias(resolver, meta, alias)
+func MustBindTransient(resolver interface{}, opts ...BindOption) {
+	root.MustBindTransient(resolver, opts...)
 }
 
 // Resolve calls root Resolve method.
-func Resolve(receiver interface{}) error {
-	return root.Resolve(receiver)
+func Resolve(receiver interface{}, opts ...ResolveOption) error {
+	return root.Resolve(receiver, opts...)
 }
 
-// ResolveWithAlias calls root ResolveWithAlias method.
-func ResolveWithAlias(receiver interface{}, alias string) error {
-	return root.ResolveWithAlias(receiver, alias)
+// MustResolve calls root MustResolve method.
+func MustResolve(receiver interface{}, opts ...ResolveOption) {
+	root.MustResolve(receiver, opts...)
 }

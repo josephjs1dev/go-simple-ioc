@@ -19,14 +19,10 @@ var (
 // Container provides utility functions to bind and resolve.
 type Container interface {
 	Clear()
-	MustBind(instance interface{})
-	MustBindWithAlias(instance interface{}, alias string)
-	MustBindSingleton(resolver interface{}, meta interface{})
-	MustBindSingletonWithAlias(resolver interface{}, meta interface{}, alias string)
-	MustBindTransient(resolver interface{}, meta interface{})
-	MustBindTransientWithAlias(resolver interface{}, meta interface{}, alias string)
-	Resolve(instance interface{}) (err error)
-	ResolveWithAlias(instance interface{}, alias string) (err error)
+	MustBindSingleton(interface{}, ...BindOption)
+	MustBindTransient(interface{}, ...BindOption)
+	Resolve(interface{}, ...ResolveOption) error
+	MustResolve(interface{}, ...ResolveOption)
 }
 
 type binder struct {
@@ -82,35 +78,41 @@ func (c *container) Clear() {
 	c.cnt = map[string]binderMap{}
 }
 
-func (c *container) bind(instance interface{}, alias string) error {
-	instanceType, err := resolveTypePtrNonFunc(instance)
-	if err != nil {
-		return err
-	}
-
-	label := getLabel(instanceType)
-	if v, ok := c.cnt[label]; !ok {
-		c.cnt[label] = binderMap{alias: {isSingleton: true, instance: instance}}
-	} else {
-		v[alias] = &binder{isSingleton: true, instance: instance}
-	}
-
-	return nil
+type bindOption struct {
+	alias       string
+	meta        interface{}
+	isSingleton bool
 }
 
-// MustBind does the binding of actual object (struct, not interface) without any alias.
-// This method only accepts struct or interface and will panic if failed to bind given parameter.
-func (c *container) MustBind(instance interface{}) {
-	if err := c.bind(instance, defaultAlias); err != nil {
-		panic(err)
+type BindOption func(o *bindOption)
+
+func WithBindAlias(alias string) BindOption {
+	return func(opt *bindOption) {
+		opt.alias = alias
 	}
 }
 
-// MustBindWithAlias does the binding of actual object (struct, not interface) but with an alias.
-// Same behaviour with MustBind but save information with alias.
-func (c *container) MustBindWithAlias(instance interface{}, alias string) {
-	if err := c.bind(instance, alias); err != nil {
-		panic(err)
+func WithBindMeta(meta interface{}) BindOption {
+	return func(opt *bindOption) {
+		opt.meta = meta
+	}
+}
+
+type resolveOption struct {
+	alias string
+}
+
+type ResolveOption func(o *resolveOption)
+
+func WithResolveAlias(alias string) ResolveOption {
+	return func(o *resolveOption) {
+		o.alias = alias
+	}
+}
+
+func applyBindOption(o *bindOption, opts []BindOption) {
+	for _, opt := range opts {
+		opt(o)
 	}
 }
 
@@ -148,7 +150,7 @@ func getDependencies(resolverType reflect.Type, instanceType reflect.Type) [][2]
 	return dependencies
 }
 
-func (c *container) bindFunc(resolver interface{}, meta interface{}, isSingleton bool, alias string) error {
+func (c *container) bind(resolver interface{}, opt *bindOption) error {
 	resolverType := reflect.TypeOf(resolver)
 	// Must be a function.
 	if resolverType.Kind() != reflect.Func {
@@ -168,8 +170,8 @@ func (c *container) bindFunc(resolver interface{}, meta interface{}, isSingleton
 	if instanceType.Kind() == reflect.Ptr {
 		instanceType = instanceType.Elem()
 	}
-	if meta != nil && instanceType.Kind() == reflect.Interface {
-		metaType := reflect.TypeOf(meta)
+	if opt.meta != nil && instanceType.Kind() == reflect.Interface {
+		metaType := reflect.TypeOf(opt.meta)
 		if metaType.Kind() != reflect.Ptr {
 			return fmt.Errorf("expected meta to be pointer, but instead got %v", metaType.Kind())
 		}
@@ -183,17 +185,17 @@ func (c *container) bindFunc(resolver interface{}, meta interface{}, isSingleton
 	dependencies := getDependencies(resolverType, instanceType)
 	if v, ok := c.cnt[label]; !ok {
 		c.cnt[label] = binderMap{
-			alias: {isSingleton: isSingleton, resolver: resolver, meta: meta, dependencies: dependencies},
+			opt.alias: {isSingleton: opt.isSingleton, resolver: resolver, meta: opt.meta, dependencies: dependencies},
 		}
 	} else {
-		v[alias] = &binder{isSingleton: isSingleton, resolver: resolver, meta: meta, dependencies: dependencies}
+		v[opt.alias] = &binder{isSingleton: opt.isSingleton, resolver: resolver, meta: opt.meta, dependencies: dependencies}
 	}
 
 	return nil
 }
 
-func (c *container) mustBindFunc(resolver interface{}, meta interface{}, isSingleton bool, alias string) {
-	if err := c.bindFunc(resolver, meta, isSingleton, alias); err != nil {
+func (c *container) mustBind(resolver interface{}, opt *bindOption) {
+	if err := c.bind(resolver, opt); err != nil {
 		panic(err)
 	}
 }
@@ -203,28 +205,20 @@ func (c *container) mustBindFunc(resolver interface{}, meta interface{}, isSingl
 // for next resolve.
 // Resolver must be a function that returns interface or pointer struct and meta can be nil or must implements
 // returned interface type from resolver.
-func (c *container) MustBindSingleton(resolver interface{}, meta interface{}) {
-	c.mustBindFunc(resolver, meta, true, defaultAlias)
-}
-
-// MustBindSingletonWithAlias binds given resolver function and metadata information to container with singleton flag and alias name.
-// Same behaviour with MustBindSingleton but save information with alias.
-func (c *container) MustBindSingletonWithAlias(resolver interface{}, meta interface{}, alias string) {
-	c.mustBindFunc(resolver, meta, true, alias)
+func (c *container) MustBindSingleton(resolver interface{}, opts ...BindOption) {
+	o := &bindOption{alias: defaultAlias, isSingleton: true}
+	applyBindOption(o, opts)
+	c.mustBind(resolver, o)
 }
 
 // MustBindTransient binds given resolver function and metadata information to container without singleton flag.
 // Each resolve will create new object.
 // Resolver must be a function that returns interface or pointer struct and meta can be nil or must implements
 // returned interface type from resolver.
-func (c *container) MustBindTransient(resolver interface{}, meta interface{}) {
-	c.mustBindFunc(resolver, meta, false, defaultAlias)
-}
-
-// MustBindTransientWithAlias binds given resolver function and metadata information to container without singleton flag and alias name.
-// Same behaviour with MustBindTransient but save information with alias.
-func (c *container) MustBindTransientWithAlias(resolver interface{}, meta interface{}, alias string) {
-	c.mustBindFunc(resolver, meta, false, alias)
+func (c *container) MustBindTransient(resolver interface{}, opts ...BindOption) {
+	o := &bindOption{alias: defaultAlias, isSingleton: false}
+	applyBindOption(o, opts)
+	c.mustBind(resolver, o)
 }
 
 func (c *container) getBinder(label, binderLabel string) (*binder, error) {
@@ -241,7 +235,13 @@ func (c *container) getBinder(label, binderLabel string) (*binder, error) {
 	return binder, nil
 }
 
-func (c *container) resolve(receiver interface{}, label, alias string) (err error) {
+func applyResolveOption(o *resolveOption, opts []ResolveOption) {
+	for _, opt := range opts {
+		opt(o)
+	}
+}
+
+func (c *container) resolve(receiver interface{}, label string, opt *resolveOption) (err error) {
 	receiverType, err := resolveTypePtrNonFunc(receiver)
 	if err != nil {
 		return err
@@ -250,7 +250,7 @@ func (c *container) resolve(receiver interface{}, label, alias string) (err erro
 	if label == "" {
 		label = getLabel(receiverType)
 	}
-	binder, err := c.getBinder(label, alias)
+	binder, err := c.getBinder(label, opt.alias)
 	if err != nil {
 		return err
 	}
@@ -269,8 +269,8 @@ func (c *container) resolve(receiver interface{}, label, alias string) (err erro
 		paramValue := reflect.New(paramType).Interface()
 
 		dependency := binder.dependencies[idx]
-		if err := c.resolve(&paramValue, dependency[0], dependency[1]); err != nil {
-			return fmt.Errorf("failed to resolve inner dependencies: %w", err)
+		if err := c.resolve(&paramValue, dependency[0], &resolveOption{alias: dependency[1]}); err != nil {
+			return fmt.Errorf("failed to resolve inner label %v with alias %v: %w", dependency[0], dependency[1], err)
 		}
 
 		in = append(in, reflect.ValueOf(paramValue))
@@ -286,14 +286,25 @@ func (c *container) resolve(receiver interface{}, label, alias string) (err erro
 	return nil
 }
 
-// Resolve resolves given receiver to appropriate bound information in container.
-// Will returns ErrNotRegistered, ErrAliasNotKnown, or any relevant errors if failed to resolve.
-func (c *container) Resolve(receiver interface{}) (err error) {
-	return c.resolve(receiver, "", defaultAlias)
+func (c *container) mustResolve(receiver interface{}, label string, opt *resolveOption) {
+	if err := c.resolve(receiver, label, opt); err != nil {
+		panic(err)
+	}
 }
 
-// ResolveWithAlias resolves given receiver and alias to appropriate bound information in container.
-// Same behaviour with Resolve.
-func (c *container) ResolveWithAlias(receiver interface{}, alias string) (err error) {
-	return c.resolve(receiver, "", alias)
+// Resolve resolves given receiver to appropriate bound information in container.
+// Will returns ErrNotRegistered, ErrAliasNotKnown, or any relevant errors if failed to resolve.
+func (c *container) Resolve(receiver interface{}, opts ...ResolveOption) (err error) {
+	o := &resolveOption{alias: defaultAlias}
+	applyResolveOption(o, opts)
+
+	return c.resolve(receiver, "", o)
+}
+
+// Resolve resolves given receiver to appropriate bound information in container.
+// Will panic if failed to resolve.
+func (c *container) MustResolve(receiver interface{}, opts ...ResolveOption) {
+	o := &resolveOption{alias: defaultAlias}
+	applyResolveOption(o, opts)
+	c.mustResolve(receiver, "", o)
 }

@@ -46,17 +46,17 @@ func (s *userService) FetchProfile(id uint64) (*User, error) {
 }
 
 func main() {
-	var cfg = &Config{IsDebug: true}
-	// Bind with alias
-	ioc.MustBindWithAlias(&cfg, "service_cfg")
-
+	cfg := &Config{IsDebug: true}
+	ioc.MustBindSingleton(func() *Config {
+		return cfg
+	}, ioc.WithBindAlias("service_cfg"))
 	ioc.MustBindSingleton(func() UserRepository {
 		return &userRepository{}
-	}, &userRepository{})
+	}, ioc.WithBindMeta(&userRepository{}))
 	// You must define dependencies that you want to inject as parameter.
 	ioc.MustBindSingleton(func(cfg *Config, ur UserRepository) UserService {
 		return &userService{cfg: cfg, repository: ur}
-	}, &userService{})
+	}, ioc.WithBindMeta(&userService{}))
 
 	var s UserService
 	// Internal container will resolve the dependency for you.
@@ -70,5 +70,5 @@ func main() {
 	}
 
 	u, _ := s.FetchProfile(0)
-	log.Printf("user: %+v\n", u)
+	log.Printf("user result: %+v\n", u)
 }

@@ -43,108 +43,10 @@ func checkMustPanic(t *testing.T) {
 	}
 }
 
-func testContainerMustResolve(t *testing.T, cnt Container, v interface{}) {
-	if err := cnt.Resolve(v); err != nil {
+func testContainerMustResolve(t *testing.T, cnt Container, v interface{}, opts ...ResolveOption) {
+	if err := cnt.Resolve(v, opts...); err != nil {
 		t.Fatalf("failed to resolve, err: %v", err)
 	}
-}
-
-func testContainerMustResolveWithAlias(t *testing.T, cnt Container, v interface{}, alias string) {
-	if err := cnt.ResolveWithAlias(v, alias); err != nil {
-		t.Fatalf("failed to resolve with alias %v, err: %v", alias, err)
-	}
-}
-
-func TestContainer_MustBind(t *testing.T) {
-	t.Run("bind non-pointer as parameter", func(t *testing.T) {
-		defer checkMustPanic(t)
-
-		cnt := CreateContainer()
-		cnt.MustBind(testStruct{})
-	})
-
-	t.Run("bind function", func(t *testing.T) {
-		defer checkMustPanic(t)
-
-		cnt := CreateContainer()
-		fnc := func() {}
-		cnt.MustBind(&fnc)
-	})
-
-	t.Run("bind non-pointer struct", func(t *testing.T) {
-		cnt := CreateContainer()
-		cnt.MustBind(&testStruct{intProp: 1})
-
-		var firstTest testStruct
-		testContainerMustResolve(t, cnt, &firstTest)
-		assert.Equal(t, 1, firstTest.intProp)
-		firstTest.intProp = 2
-
-		var secondTest testStruct
-		testContainerMustResolve(t, cnt, &secondTest)
-		assert.Equal(t, 1, secondTest.intProp)
-
-		assert.NotEqual(t, firstTest.intProp, secondTest.intProp)
-	})
-
-	t.Run("bind pointer struct", func(t *testing.T) {
-		cnt := CreateContainer()
-
-		var boundStruct = &testStruct{intProp: 1}
-		cnt.MustBind(&boundStruct)
-
-		var firstTest *testStruct
-		testContainerMustResolve(t, cnt, &firstTest)
-		assert.Equal(t, boundStruct.intProp, firstTest.intProp)
-		firstTest.intProp = 2
-		assert.Equal(t, boundStruct.intProp, firstTest.intProp)
-
-		var secondTest *testStruct
-		testContainerMustResolve(t, cnt, &secondTest)
-		assert.Equal(t, boundStruct.intProp, secondTest.intProp)
-	})
-
-	t.Run("bind non-registered struct", func(t *testing.T) {
-		cnt := CreateContainer()
-
-		var boundStruct = &testStruct{intProp: 1}
-		cnt.MustBind(&boundStruct)
-
-		var firstTest testStruct
-		if err := cnt.Resolve(&firstTest); err != nil {
-			assert.Equal(t, ErrNotRegistered, err)
-		} else {
-			t.Fatalf("should be failed to resolve")
-		}
-	})
-}
-
-func TestContainer_MustBindWithAlias(t *testing.T) {
-	t.Run("bind function with alias", func(t *testing.T) {
-		defer checkMustPanic(t)
-
-		cnt := CreateContainer()
-		fnc := func() {}
-		cnt.MustBindWithAlias(&fnc, "panic")
-	})
-
-	t.Run("bind pointer struct with alias", func(t *testing.T) {
-		cnt := CreateContainer()
-
-		var boundStruct = &testStruct{intProp: 1}
-		cnt.MustBindWithAlias(&boundStruct, "first")
-
-		var firstTest *testStruct
-		testContainerMustResolveWithAlias(t, cnt, &firstTest, "first")
-		assert.Equal(t, boundStruct.intProp, firstTest.intProp)
-
-		var secondTest *testStruct
-		if err := cnt.ResolveWithAlias(&secondTest, "no_alias"); err != nil {
-			assert.Equal(t, ErrAliasNotKnown, err)
-		} else {
-			t.Fatalf("should be failed to resolve")
-		}
-	})
 }
 
 func TestContainer_MustBindSingleton(t *testing.T) {
@@ -177,7 +79,7 @@ func TestContainer_MustBindSingleton(t *testing.T) {
 		cnt := CreateContainer()
 		cnt.MustBindSingleton(func(bound *testStruct) dTestInterface {
 			return &dTestTagStruct{testStruct: bound}
-		}, dTestTagStruct{})
+		}, WithBindMeta(dTestTagStruct{}))
 	})
 
 	t.Run("bind singleton meta not implements interface", func(t *testing.T) {
@@ -186,17 +88,24 @@ func TestContainer_MustBindSingleton(t *testing.T) {
 		cnt := CreateContainer()
 		cnt.MustBindSingleton(func(bound *testStruct) dTestInterface {
 			return &dTestTagStruct{testStruct: bound}
-		}, &testStruct{})
+		}, WithBindMeta(&testStruct{}))
 	})
 
-	t.Run("bind singleton pointer struct", func(t *testing.T) {
+	t.Run("bind singleton non function resolver with alias", func(t *testing.T) {
+		defer checkMustPanic(t)
+
+		cnt := CreateContainer()
+		cnt.MustBindSingleton(&testStruct{}, WithBindAlias("panic"))
+	})
+
+	t.Run("bind singleton pointer struct with/without dependencies", func(t *testing.T) {
 		cnt := CreateContainer()
 
 		var boundStruct = &testStruct{intProp: 1}
-		cnt.MustBind(&boundStruct)
+		cnt.MustBindSingleton(func() *testStruct { return boundStruct })
 		cnt.MustBindSingleton(func(bound *testStruct) *dTestStruct {
 			return &dTestStruct{testStruct: bound}
-		}, nil)
+		})
 
 		var firstDTest *dTestStruct
 		testContainerMustResolve(t, cnt, &firstDTest)
@@ -212,14 +121,14 @@ func TestContainer_MustBindSingleton(t *testing.T) {
 		assert.Equal(t, firstDTest, secondDTest)
 	})
 
-	t.Run("bind singleton interface", func(t *testing.T) {
+	t.Run("bind singleton interface with alias tag dependencies", func(t *testing.T) {
 		cnt := CreateContainer()
 
 		var boundStruct = &testStruct{intProp: 1}
-		cnt.MustBindWithAlias(&boundStruct, "test")
+		cnt.MustBindSingleton(func() *testStruct { return boundStruct }, WithBindAlias("test"))
 		cnt.MustBindSingleton(func(bound *testStruct) dTestInterface {
 			return &dTestTagStruct{testStruct: bound}
-		}, &dTestTagStruct{})
+		}, WithBindMeta(&dTestTagStruct{}))
 
 		var firstDTest dTestInterface
 		testContainerMustResolve(t, cnt, &firstDTest)
@@ -229,49 +138,40 @@ func TestContainer_MustBindSingleton(t *testing.T) {
 	t.Run("bind singleton with dependencies outside internal property", func(t *testing.T) {
 		cnt := CreateContainer()
 
-		type outsideStruct struct {
+		type testOutsideStruct struct {
 			internalProps string
 		}
 
 		var boundStruct = &testStruct{intProp: 1}
-		var o = &outsideStruct{internalProps: "test"}
-		cnt.MustBind(&o)
-		cnt.MustBindWithAlias(&boundStruct, "test")
-		cnt.MustBindSingleton(func(bound *testStruct, o *outsideStruct) dTestInterface {
-			assert.Equal(t, o.internalProps, "test")
+		var outsideStruct = &testOutsideStruct{internalProps: "test"}
+		cnt.MustBindSingleton(func() *testOutsideStruct { return outsideStruct })
+		cnt.MustBindSingleton(func() *testStruct { return boundStruct }, WithBindAlias("test"))
+		cnt.MustBindSingleton(func(bound *testStruct, outside *testOutsideStruct) dTestInterface {
+			assert.Equal(t, outsideStruct, outside)
 
 			return &dTestTagStruct{testStruct: bound}
-		}, &dTestTagStruct{})
+		}, WithBindMeta(&dTestTagStruct{}))
 
 		var firstDTest dTestInterface
 		testContainerMustResolve(t, cnt, &firstDTest)
 		assert.Equal(t, boundStruct, firstDTest.(*dTestTagStruct).testStruct)
 	})
-}
 
-func TestContainer_MustBindSingletonWithAlias(t *testing.T) {
-	t.Run("bind singleton non function resolver with alias", func(t *testing.T) {
-		defer checkMustPanic(t)
-
-		cnt := CreateContainer()
-		cnt.MustBindSingletonWithAlias(&testStruct{}, nil, "panic")
-	})
-
-	t.Run("bind singleton interface with alias", func(t *testing.T) {
+	t.Run("bind singleton interface with alias and alias tag dependencies", func(t *testing.T) {
 		cnt := CreateContainer()
 
 		var boundStruct = &testStruct{intProp: 1}
-		cnt.MustBindWithAlias(&boundStruct, "test")
-		cnt.MustBindSingletonWithAlias(func(bound *testStruct) dTestInterface {
+		cnt.MustBindSingleton(func() *testStruct { return boundStruct }, WithBindAlias("test"))
+		cnt.MustBindSingleton(func(bound *testStruct) dTestInterface {
 			return &dTestTagStruct{testStruct: bound}
-		}, &dTestTagStruct{}, "first")
+		}, WithBindMeta(&dTestTagStruct{}), WithBindAlias("first"))
 
 		var firstDTest dTestInterface
-		testContainerMustResolveWithAlias(t, cnt, &firstDTest, "first")
+		testContainerMustResolve(t, cnt, &firstDTest, WithResolveAlias("first"))
 		assert.Equal(t, boundStruct, firstDTest.(*dTestTagStruct).testStruct)
 
 		var secondTest dTestInterface
-		if err := cnt.ResolveWithAlias(&secondTest, "no_alias"); err != nil {
+		if err := cnt.Resolve(&secondTest, WithResolveAlias("no_alias")); err != nil {
 			assert.Equal(t, ErrAliasNotKnown, err)
 		} else {
 			t.Fatalf("should be failed to resolve")
@@ -287,14 +187,21 @@ func TestContainer_MustBindTransient(t *testing.T) {
 		cnt.MustBindTransient(&testStruct{}, nil)
 	})
 
+	t.Run("bind transient non function resolver with alias", func(t *testing.T) {
+		defer checkMustPanic(t)
+
+		cnt := CreateContainer()
+		cnt.MustBindSingleton(&testStruct{}, WithBindAlias("panic"))
+	})
+
 	t.Run("bind transient pointer struct", func(t *testing.T) {
 		cnt := CreateContainer()
 
 		var boundStruct = &testStruct{intProp: 1}
-		cnt.MustBind(&boundStruct)
+		cnt.MustBindSingleton(func() *testStruct { return boundStruct })
 		cnt.MustBindTransient(func(bound *testStruct) *dTestStruct {
 			return &dTestStruct{testStruct: bound}
-		}, nil)
+		})
 
 		var firstDTest *dTestStruct
 		testContainerMustResolve(t, cnt, &firstDTest)
@@ -314,10 +221,10 @@ func TestContainer_MustBindTransient(t *testing.T) {
 		cnt := CreateContainer()
 
 		var boundStruct = &testStruct{intProp: 1}
-		cnt.MustBindWithAlias(&boundStruct, "test")
+		cnt.MustBindSingleton(func() *testStruct { return boundStruct }, WithBindAlias("test"))
 		cnt.MustBindTransient(func(bound *testStruct) dTestInterface {
 			return &dTestTagStruct{testStruct: bound}
-		}, &dTestTagStruct{})
+		}, WithBindMeta(&dTestTagStruct{}))
 
 		var firstDTest dTestInterface
 		testContainerMustResolve(t, cnt, &firstDTest)
@@ -331,33 +238,24 @@ func TestContainer_MustBindTransient(t *testing.T) {
 		assert.Equal(t, boundStruct, secondV.testStruct)
 		assert.NotEqual(t, secondV, firstV)
 	})
-}
-
-func TestContainer_MustBindTransientWithAlias(t *testing.T) {
-	t.Run("bind transient non function resolver with alias", func(t *testing.T) {
-		defer checkMustPanic(t)
-
-		cnt := CreateContainer()
-		cnt.MustBindTransientWithAlias(&testStruct{}, nil, "panic")
-	})
 
 	t.Run("bind transient interface with alias", func(t *testing.T) {
 		cnt := CreateContainer()
 
 		var boundStruct = &testStruct{intProp: 1}
-		cnt.MustBindWithAlias(&boundStruct, "test")
-		cnt.MustBindTransientWithAlias(func(bound *testStruct) dTestInterface {
+		cnt.MustBindSingleton(func() *testStruct { return boundStruct }, WithBindAlias("test"))
+		cnt.MustBindTransient(func(bound *testStruct) dTestInterface {
 			return &dTestTagStruct{testStruct: bound}
-		}, &dTestTagStruct{}, "first")
+		}, WithBindMeta(&dTestTagStruct{}), WithBindAlias("first"))
 
 		var firstDTest dTestInterface
-		testContainerMustResolveWithAlias(t, cnt, &firstDTest, "first")
+		testContainerMustResolve(t, cnt, &firstDTest, WithResolveAlias("first"))
 		firstV := firstDTest.(*dTestTagStruct)
 		assert.Equal(t, boundStruct, firstV.testStruct)
 		firstV.testStruct = &testStruct{intProp: 2}
 
 		var secondTest dTestInterface
-		if err := cnt.ResolveWithAlias(&secondTest, "no_alias"); err != nil {
+		if err := cnt.Resolve(&secondTest, WithResolveAlias("no_alias")); err != nil {
 			assert.Equal(t, ErrAliasNotKnown, err)
 		} else {
 			t.Fatalf("should be failed to resolve")

@@ -33,12 +33,6 @@ will be the injector and will inject any dependencies defined to actual struct u
 
 ## Features
 
-### Bind
-
-IoC container can bind struct / interface by its type, and you can add alias too.
-
-Example can be seen in: [here](./examples/bind).
-
 ### Bind singleton
 
 Bind singleton is kind of normal Bind, but with function and injected dependencies as parameters.
