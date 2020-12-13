@@ -7,9 +7,19 @@ func Clear() {
 	root.Clear()
 }
 
+// BindSingleton calls root BindSingleton method.
+func BindSingleton(resolver interface{}, opts ...BindOption) error {
+	return root.BindSingleton(resolver, opts...)
+}
+
 // MustBindSingleton calls root MustBindSingleton method.
 func MustBindSingleton(resolver interface{}, opts ...BindOption) {
 	root.MustBindSingleton(resolver, opts...)
+}
+
+// BindTransient calls root BindTransient method.
+func BindTransient(resolver interface{}, opts ...BindOption) error {
+	return root.BindTransient(resolver, opts...)
 }
 
 // MustBindTransient calls root MustBindTransient method.

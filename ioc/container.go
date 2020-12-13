@@ -19,7 +19,9 @@ var (
 // Container provides utility functions to bind and resolve.
 type Container interface {
 	Clear()
+	BindSingleton(interface{}, ...BindOption) error
 	MustBindSingleton(interface{}, ...BindOption)
+	BindTransient(interface{}, ...BindOption) error
 	MustBindTransient(interface{}, ...BindOption)
 	Resolve(interface{}, ...ResolveOption) error
 	MustResolve(interface{}, ...ResolveOption)
@@ -194,31 +196,41 @@ func (c *container) bind(resolver interface{}, opt *bindOption) error {
 	return nil
 }
 
-func (c *container) mustBind(resolver interface{}, opt *bindOption) {
-	if err := c.bind(resolver, opt); err != nil {
-		panic(err)
-	}
-}
-
-// MustBindSingleton binds given resolver function and metadata information to container with singleton flag.
+// BindSingleton binds given resolver function and metadata information to container with singleton flag.
 // As it is singleton, after first resolve, container will save resolved information and immediately returns data
 // for next resolve.
 // Resolver must be a function that returns interface or pointer struct and meta can be nil or must implements
 // returned interface type from resolver.
-func (c *container) MustBindSingleton(resolver interface{}, opts ...BindOption) {
+func (c *container) BindSingleton(resolver interface{}, opts ...BindOption) error {
 	o := &bindOption{alias: defaultAlias, isSingleton: true}
 	applyBindOption(o, opts)
-	c.mustBind(resolver, o)
+
+	return c.bind(resolver, o)
 }
 
-// MustBindTransient binds given resolver function and metadata information to container without singleton flag.
+// MustBindSingleton is same as BindSingleton, but will panic if error.
+func (c *container) MustBindSingleton(resolver interface{}, opts ...BindOption) {
+	if err := c.BindSingleton(resolver, opts...); err != nil {
+		panic(err)
+	}
+}
+
+// BindTransient binds given resolver function and metadata information to container without singleton flag.
 // Each resolve will create new object.
 // Resolver must be a function that returns interface or pointer struct and meta can be nil or must implements
 // returned interface type from resolver.
-func (c *container) MustBindTransient(resolver interface{}, opts ...BindOption) {
+func (c *container) BindTransient(resolver interface{}, opts ...BindOption) error {
 	o := &bindOption{alias: defaultAlias, isSingleton: false}
 	applyBindOption(o, opts)
-	c.mustBind(resolver, o)
+
+	return c.bind(resolver, o)
+}
+
+// MustBindTransient is same as BindTransient, but will panic if error.
+func (c *container) MustBindTransient(resolver interface{}, opts ...BindOption) {
+	if err := c.BindTransient(resolver, opts...); err != nil {
+		panic(err)
+	}
 }
 
 func (c *container) getBinder(label, binderLabel string) (*binder, error) {
@@ -286,12 +298,6 @@ func (c *container) resolve(receiver interface{}, label string, opt *resolveOpti
 	return nil
 }
 
-func (c *container) mustResolve(receiver interface{}, label string, opt *resolveOption) {
-	if err := c.resolve(receiver, label, opt); err != nil {
-		panic(err)
-	}
-}
-
 // Resolve resolves given receiver to appropriate bound information in container.
 // Will returns ErrNotRegistered, ErrAliasNotKnown, or any relevant errors if failed to resolve.
 func (c *container) Resolve(receiver interface{}, opts ...ResolveOption) (err error) {
@@ -304,7 +310,7 @@ func (c *container) Resolve(receiver interface{}, opts ...ResolveOption) (err er
 // Resolve resolves given receiver to appropriate bound information in container.
 // Will panic if failed to resolve.
 func (c *container) MustResolve(receiver interface{}, opts ...ResolveOption) {
-	o := &resolveOption{alias: defaultAlias}
-	applyResolveOption(o, opts)
-	c.mustResolve(receiver, "", o)
+	if err := c.Resolve(receiver, opts...); err != nil {
+		panic(err)
+	}
 }
