@@ -126,22 +126,25 @@ func getDependencies(resolverType reflect.Type, instanceType reflect.Type) [][2]
 	}
 
 	dependencies := make([][2]string, resolverType.NumIn())
-	for idx := 0; idx < instanceType.NumField(); idx++ {
-		field := instanceType.Field(idx)
-		label := getLabel(field.Type)
-		inIdx, ok := dependencyLabelMap[label]
-		if !ok {
-			continue
-		}
 
-		tag, ok := field.Tag.Lookup(structTag)
-		if !ok || tag == "" {
-			tag = defaultAlias
-		}
-		delete(dependencyLabelMap, label)
+	if instanceType.Kind() != reflect.Interface {
+		for idx := 0; idx < instanceType.NumField(); idx++ {
+			field := instanceType.Field(idx)
+			label := getLabel(field.Type)
+			inIdx, ok := dependencyLabelMap[label]
+			if !ok {
+				continue
+			}
 
-		v := strings.Split(tag, ",")
-		dependencies[inIdx] = [2]string{label, v[0]}
+			tag, ok := field.Tag.Lookup(structTag)
+			if !ok || tag == "" {
+				tag = defaultAlias
+			}
+			delete(dependencyLabelMap, label)
+
+			v := strings.Split(tag, ",")
+			dependencies[inIdx] = [2]string{label, v[0]}
+		}
 	}
 
 	// Leftover will be set to default

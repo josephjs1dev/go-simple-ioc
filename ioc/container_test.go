@@ -121,6 +121,22 @@ func TestContainer_MustBindSingleton(t *testing.T) {
 		assert.Equal(t, firstDTest, secondDTest)
 	})
 
+	t.Run("bind singleton interface with/without dependencies", func(t *testing.T) {
+		cnt := CreateContainer()
+
+		var boundStruct = &testStruct{intProp: 1}
+		cnt.MustBindSingleton(func() *testStruct { return boundStruct })
+		cnt.MustBindSingleton(func(bound *testStruct) dTestInterface {
+			return &dTestStruct{testStruct: bound}
+		})
+
+		var firstDTest dTestInterface
+		testContainerMustResolve(t, cnt, &firstDTest)
+
+		assert.NotNil(t, firstDTest.(*dTestStruct).testStruct)
+		assert.Equal(t, boundStruct, firstDTest.(*dTestStruct).testStruct)
+	})
+
 	t.Run("bind singleton interface with alias tag dependencies", func(t *testing.T) {
 		cnt := CreateContainer()
 
@@ -217,7 +233,7 @@ func TestContainer_MustBindTransient(t *testing.T) {
 		assert.NotEqual(t, firstDTest, secondDTest)
 	})
 
-	t.Run("bind transient interface", func(t *testing.T) {
+	t.Run("bind transient interface with alias tag dependencies", func(t *testing.T) {
 		cnt := CreateContainer()
 
 		var boundStruct = &testStruct{intProp: 1}
