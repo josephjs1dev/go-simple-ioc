@@ -38,6 +38,25 @@ func (d *dTestTagStruct) GetIntProp() int {
 	return -1
 }
 
+type dTestSameTypeStruct struct {
+	testStruct  *testStruct
+	testStruct2 *testStruct `ioc:"test"`
+}
+
+func (d *dTestSameTypeStruct) GetIntProp() int {
+	if d.testStruct != nil && d.testStruct2 != nil {
+		return d.testStruct.intProp + d.testStruct2.intProp
+	}
+	if d.testStruct != nil {
+		return d.testStruct.intProp
+	}
+	if d.testStruct2 != nil {
+		return d.testStruct2.intProp
+	}
+
+	return -1
+}
+
 func checkMustPanic(t *testing.T) {
 	if r := recover(); r == nil {
 		t.Fatalf("should be panic")
@@ -150,6 +169,23 @@ func TestContainer_MustBindSingleton(t *testing.T) {
 		var firstDTest dTestInterface
 		testContainerMustResolve(t, cnt, &firstDTest)
 		assert.Equal(t, boundStruct, firstDTest.(*dTestTagStruct).testStruct)
+	})
+
+	t.Run("bind singleton interface with multiple same type dependencies", func(t *testing.T) {
+		cnt := CreateContainer()
+
+		var boundStruct = &testStruct{intProp: 1}
+		var otherBoundStruct = &testStruct{intProp: 2}
+		cnt.MustBindSingleton(func() *testStruct { return boundStruct })
+		cnt.MustBindSingleton(func() *testStruct { return otherBoundStruct }, WithBindAlias("test"))
+		cnt.MustBindSingleton(func(bound, otherBound *testStruct) dTestInterface {
+			return &dTestSameTypeStruct{testStruct: bound, testStruct2: otherBound}
+		}, WithBindMeta(&dTestSameTypeStruct{}))
+
+		var firstDTest dTestInterface
+		testContainerMustResolve(t, cnt, &firstDTest)
+		assert.Equal(t, boundStruct, firstDTest.(*dTestSameTypeStruct).testStruct)
+		assert.Equal(t, otherBoundStruct, firstDTest.(*dTestSameTypeStruct).testStruct2)
 	})
 
 	t.Run("bind singleton with dependencies outside internal property", func(t *testing.T) {

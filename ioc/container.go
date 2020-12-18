@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const structTag = "ioc"
+const structTagKey = "ioc"
 const defaultAlias = "default"
 
 var (
@@ -119,37 +119,48 @@ func applyBindOption(o *bindOption, opts []BindOption) {
 }
 
 func getDependencies(resolverType reflect.Type, instanceType reflect.Type) [][2]string {
-	dependencyLabelMap := map[string]int{}
+	labelMap := map[string][]int{}
+	labelCtrMap := make(map[string]int)
 	for idx := 0; idx < resolverType.NumIn(); idx++ {
 		paramType := resolverType.In(idx)
-		dependencyLabelMap[getLabel(paramType)] = idx
+		label := getLabel(paramType)
+		if _, ok := labelMap[label]; !ok {
+			labelMap[label] = []int{idx}
+			labelCtrMap[label] = 0
+		} else {
+			labelMap[label] = append(labelMap[label], idx)
+		}
 	}
 
 	dependencies := make([][2]string, resolverType.NumIn())
-
 	if instanceType.Kind() != reflect.Interface {
 		for idx := 0; idx < instanceType.NumField(); idx++ {
 			field := instanceType.Field(idx)
 			label := getLabel(field.Type)
-			inIdx, ok := dependencyLabelMap[label]
+			inIdxList, ok := labelMap[label]
 			if !ok {
 				continue
 			}
+			inIdx := inIdxList[labelCtrMap[label]]
+			labelCtrMap[label]++
 
-			tag, ok := field.Tag.Lookup(structTag)
-			if !ok || tag == "" {
-				tag = defaultAlias
-			}
-			delete(dependencyLabelMap, label)
-
+			tag, ok := field.Tag.Lookup(structTagKey)
 			v := strings.Split(tag, ",")
-			dependencies[inIdx] = [2]string{label, v[0]}
+
+			alias := v[0]
+			if alias == "" {
+				alias = defaultAlias
+			}
+
+			dependencies[inIdx] = [2]string{label, alias}
 		}
 	}
 
 	// Leftover will be set to default
-	for label, inIdx := range dependencyLabelMap {
-		dependencies[inIdx] = [2]string{label, defaultAlias}
+	for label, inIdxList := range labelMap {
+		for i := labelCtrMap[label]; i < len(inIdxList); i++ {
+			dependencies[inIdxList[i]] = [2]string{label, defaultAlias}
+		}
 	}
 
 	return dependencies

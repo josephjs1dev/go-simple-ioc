@@ -47,6 +47,8 @@ Bind transient is like bind singleton, except for each resolve call, it will cre
 
 1. Can't bind object with circular dependencies.
 2. It uses reflection so may cause slower when serving request. Best to use when initialization.
+3. When resolving dependencies with same types, parameter given must be ordered following 
+    order of properties in actual definition type.
 
 ## Want to contribute?
 Feel free to clone this repository and create PR! 😁😁
