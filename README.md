@@ -31,6 +31,13 @@ In golang, we can actually get those objects via method injections.
 What this library does is create IoC container that implements IoC principle in golang. The container
 will be the injector and will inject any dependencies defined to actual struct using method injections in simple ways.
 
+## Inspiration
+This library is inspired from [golobby/container](https://github.com/golobby/container) especially how it handles reflections,
+but with more additional features and other change in implementation and binding/resolve flow.
+1. Instead of initiating instance immediately for singleton flag, this library only initiates when calling resolve function only.
+2. This library does not throw panic (except if you call function started with `MustXXX`).
+3. Adding metadata information to enable tag with a custom name for struct property.
+
 ## Features
 
 ### Bind singleton
@@ -46,8 +53,8 @@ Bind transient is like bind singleton, except for each resolve call, it will cre
 ## Caveat
 
 1. Can't bind object with circular dependencies.
-2. It uses reflection so may cause slower when serving request. Best to use when initialization.
-3. When resolving dependencies with same types, parameter given must be ordered following 
+2. It uses reflection so may cause slower when serving request. Best to use when initialize your project/service.
+3. When resolving dependencies with same actual type/interface, parameter given must be ordered following 
     order of properties in actual definition type.
 
 ## Want to contribute?

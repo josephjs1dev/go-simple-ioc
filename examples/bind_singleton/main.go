@@ -69,6 +69,15 @@ func main() {
 		log.Printf("actual implementation: %+v\n", v)
 	}
 
+	var r UserRepository
+	if err := ioc.Resolve(&r); err != nil {
+		log.Fatal(err)
+	}
+	// The variable will be filled with userService instance.
+	if v, ok := r.(*userRepository); ok {
+		log.Printf("actual implementation: %+v\n", v)
+	}
+
 	u, _ := s.FetchProfile(0)
 	log.Printf("user result: %+v\n", u)
 }

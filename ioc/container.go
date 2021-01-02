@@ -30,8 +30,8 @@ type Container interface {
 type binder struct {
 	// isSingleton is flag to check whether it is singleton or transient.
 	isSingleton bool
-	// resolver is internal function that resolves the actual implementation.
-	resolver interface{}
+	// resolveFunc is internal function that resolves the actual implementation.
+	resolveFunc interface{}
 	// meta is metadata information of the instance.
 	meta interface{}
 	// instance is actual implementation saved.
@@ -118,11 +118,11 @@ func applyBindOption(o *bindOption, opts []BindOption) {
 	}
 }
 
-func getDependencies(resolverType reflect.Type, instanceType reflect.Type) [][2]string {
+func getDependencies(resolveFuncType reflect.Type, instanceType reflect.Type) [][2]string {
 	labelMap := map[string][]int{}
 	labelCtrMap := make(map[string]int)
-	for idx := 0; idx < resolverType.NumIn(); idx++ {
-		paramType := resolverType.In(idx)
+	for idx := 0; idx < resolveFuncType.NumIn(); idx++ {
+		paramType := resolveFuncType.In(idx)
 		label := getLabel(paramType)
 		if _, ok := labelMap[label]; !ok {
 			labelMap[label] = []int{idx}
@@ -132,7 +132,7 @@ func getDependencies(resolverType reflect.Type, instanceType reflect.Type) [][2]
 		}
 	}
 
-	dependencies := make([][2]string, resolverType.NumIn())
+	dependencies := make([][2]string, resolveFuncType.NumIn())
 	if instanceType.Kind() != reflect.Interface {
 		for idx := 0; idx < instanceType.NumField(); idx++ {
 			field := instanceType.Field(idx)
@@ -166,17 +166,17 @@ func getDependencies(resolverType reflect.Type, instanceType reflect.Type) [][2]
 	return dependencies
 }
 
-func (c *container) bind(resolver interface{}, opt *bindOption) error {
-	resolverType := reflect.TypeOf(resolver)
+func (c *container) bind(resolveFunc interface{}, opt *bindOption) error {
+	resolveFuncType := reflect.TypeOf(resolveFunc)
 	// Must be a function.
-	if resolverType.Kind() != reflect.Func {
-		return fmt.Errorf("expected resolver to be function, but instead got %v", resolverType.Kind())
+	if resolveFuncType.Kind() != reflect.Func {
+		return fmt.Errorf("expected first params to be function, but instead got %v", resolveFuncType.Kind())
 	}
-	if resolverType.NumOut() < 1 {
-		return fmt.Errorf("expected minimum output of 1, but instead got: %v", resolverType.NumOut())
+	if resolveFuncType.NumOut() < 1 {
+		return fmt.Errorf("expected minimum output of 1, but instead got: %v", resolveFuncType.NumOut())
 	}
 
-	instanceType := resolverType.Out(0)
+	instanceType := resolveFuncType.Out(0)
 	if instanceType.Kind() != reflect.Ptr && instanceType.Kind() != reflect.Interface {
 		return fmt.Errorf("expected pointer or interface, but instead got %v", instanceType)
 	}
@@ -198,51 +198,51 @@ func (c *container) bind(resolver interface{}, opt *bindOption) error {
 		instanceType = metaType.Elem()
 	}
 
-	dependencies := getDependencies(resolverType, instanceType)
+	dependencies := getDependencies(resolveFuncType, instanceType)
 	if v, ok := c.cnt[label]; !ok {
 		c.cnt[label] = binderMap{
-			opt.alias: {isSingleton: opt.isSingleton, resolver: resolver, meta: opt.meta, dependencies: dependencies},
+			opt.alias: {isSingleton: opt.isSingleton, resolveFunc: resolveFunc, meta: opt.meta, dependencies: dependencies},
 		}
 	} else {
-		v[opt.alias] = &binder{isSingleton: opt.isSingleton, resolver: resolver, meta: opt.meta, dependencies: dependencies}
+		v[opt.alias] = &binder{isSingleton: opt.isSingleton, resolveFunc: resolveFunc, meta: opt.meta, dependencies: dependencies}
 	}
 
 	return nil
 }
 
-// BindSingleton binds given resolver function and metadata information to container with singleton flag.
+// BindSingleton binds given resolve function and metadata information to container with singleton flag.
 // As it is singleton, after first resolve, container will save resolved information and immediately returns data
 // for next resolve.
-// Resolver must be a function that returns interface or pointer struct and meta can be nil or must implements
-// returned interface type from resolver.
-func (c *container) BindSingleton(resolver interface{}, opts ...BindOption) error {
+// First parameter must be a function that returns interface or pointer struct and meta can be nil or must implements
+// returned interface type from resolveFunc.
+func (c *container) BindSingleton(resolveFunc interface{}, opts ...BindOption) error {
 	o := &bindOption{alias: defaultAlias, isSingleton: true}
 	applyBindOption(o, opts)
 
-	return c.bind(resolver, o)
+	return c.bind(resolveFunc, o)
 }
 
 // MustBindSingleton is same as BindSingleton, but will panic if error.
-func (c *container) MustBindSingleton(resolver interface{}, opts ...BindOption) {
-	if err := c.BindSingleton(resolver, opts...); err != nil {
+func (c *container) MustBindSingleton(resolveFunc interface{}, opts ...BindOption) {
+	if err := c.BindSingleton(resolveFunc, opts...); err != nil {
 		panic(err)
 	}
 }
 
-// BindTransient binds given resolver function and metadata information to container without singleton flag.
+// BindTransient binds given resolveFunc function and metadata information to container without singleton flag.
 // Each resolve will create new object.
-// Resolver must be a function that returns interface or pointer struct and meta can be nil or must implements
-// returned interface type from resolver.
-func (c *container) BindTransient(resolver interface{}, opts ...BindOption) error {
+// First parameter must be a function that returns interface or pointer struct and meta can be nil or must implements
+// returned interface type from resolveFunc.
+func (c *container) BindTransient(resolveFunc interface{}, opts ...BindOption) error {
 	o := &bindOption{alias: defaultAlias, isSingleton: false}
 	applyBindOption(o, opts)
 
-	return c.bind(resolver, o)
+	return c.bind(resolveFunc, o)
 }
 
 // MustBindTransient is same as BindTransient, but will panic if error.
-func (c *container) MustBindTransient(resolver interface{}, opts ...BindOption) {
-	if err := c.BindTransient(resolver, opts...); err != nil {
+func (c *container) MustBindTransient(resolveFunc interface{}, opts ...BindOption) {
+	if err := c.BindTransient(resolveFunc, opts...); err != nil {
 		panic(err)
 	}
 }
@@ -268,6 +268,47 @@ func applyResolveOption(o *resolveOption, opts []ResolveOption) {
 	}
 }
 
+func (c *container) buildDependencyArguments(b *binder) ([]reflect.Value, error) {
+	resolveFuncType := reflect.TypeOf(b.resolveFunc)
+	in := make([]reflect.Value, 0)
+	for idx := 0; idx < resolveFuncType.NumIn(); idx++ {
+		dependency := b.dependencies[idx]
+		argBinder, err := c.getBinder(dependency[0], dependency[1])
+		if err != nil {
+			return nil, err
+		}
+
+		res, err := c.invoke(argBinder)
+		if err != nil {
+			return nil, err
+		}
+
+		in = append(in, reflect.ValueOf(res))
+	}
+
+	return in, nil
+}
+
+func (c *container) invoke(b *binder) (interface{}, error) {
+	if b.instance != nil {
+		return b.instance, nil
+	}
+
+	args, err := c.buildDependencyArguments(b)
+	if err != nil {
+		return nil, err
+	}
+
+	resolveFuncValue := reflect.ValueOf(b.resolveFunc)
+	results := resolveFuncValue.Call(args)
+
+	if b.isSingleton {
+		b.instance = results[0].Interface()
+	}
+
+	return results[0].Interface(), nil
+}
+
 func (c *container) resolve(receiver interface{}, label string, opt *resolveOption) (err error) {
 	receiverType, err := resolveTypePtrNonFunc(receiver)
 	if err != nil {
@@ -277,38 +318,14 @@ func (c *container) resolve(receiver interface{}, label string, opt *resolveOpti
 	if label == "" {
 		label = getLabel(receiverType)
 	}
-	binder, err := c.getBinder(label, opt.alias)
+	b, err := c.getBinder(label, opt.alias)
 	if err != nil {
 		return err
 	}
 
 	receiverValue := reflect.ValueOf(receiver).Elem()
-	if binder.instance != nil {
-		receiverValue.Set(reflect.ValueOf(binder.instance).Elem())
-
-		return nil
-	}
-
-	resolverType := reflect.TypeOf(binder.resolver)
-	in := make([]reflect.Value, 0)
-	for idx := 0; idx < resolverType.NumIn(); idx++ {
-		paramType := resolverType.In(idx)
-		paramValue := reflect.New(paramType).Interface()
-
-		dependency := binder.dependencies[idx]
-		if err := c.resolve(&paramValue, dependency[0], &resolveOption{alias: dependency[1]}); err != nil {
-			return err
-		}
-
-		in = append(in, reflect.ValueOf(paramValue))
-	}
-
-	resolverValue := reflect.ValueOf(binder.resolver)
-	receiverValue.Set(resolverValue.Call(in)[0])
-
-	if binder.isSingleton {
-		binder.instance = reflect.ValueOf(receiver).Interface()
-	}
+	result, err := c.invoke(b)
+	receiverValue.Set(reflect.ValueOf(result))
 
 	return nil
 }

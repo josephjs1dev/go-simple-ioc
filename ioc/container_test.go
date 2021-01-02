@@ -70,21 +70,21 @@ func testContainerMustResolve(t *testing.T, cnt Container, v interface{}, opts .
 }
 
 func TestContainer_MustBindSingleton(t *testing.T) {
-	t.Run("bind singleton non function resolver", func(t *testing.T) {
+	t.Run("bind singleton non function", func(t *testing.T) {
 		defer checkMustPanic(t)
 
 		cnt := CreateContainer()
 		cnt.MustBindSingleton(&testStruct{}, nil)
 	})
 
-	t.Run("bind singleton resolver empty return", func(t *testing.T) {
+	t.Run("bind singleton function empty return", func(t *testing.T) {
 		defer checkMustPanic(t)
 
 		cnt := CreateContainer()
 		cnt.MustBindSingleton(func() {}, nil)
 	})
 
-	t.Run("bind singleton resolver return non pointer or non interface", func(t *testing.T) {
+	t.Run("bind singleton function return non pointer or non interface", func(t *testing.T) {
 		defer checkMustPanic(t)
 
 		cnt := CreateContainer()
@@ -111,7 +111,7 @@ func TestContainer_MustBindSingleton(t *testing.T) {
 		}, WithBindMeta(&testStruct{}))
 	})
 
-	t.Run("bind singleton non function resolver with alias", func(t *testing.T) {
+	t.Run("bind singleton non function with alias", func(t *testing.T) {
 		defer checkMustPanic(t)
 
 		cnt := CreateContainer()
@@ -233,14 +233,14 @@ func TestContainer_MustBindSingleton(t *testing.T) {
 }
 
 func TestContainer_MustBindTransient(t *testing.T) {
-	t.Run("bind transient non function resolver", func(t *testing.T) {
+	t.Run("bind transient non function", func(t *testing.T) {
 		defer checkMustPanic(t)
 
 		cnt := CreateContainer()
 		cnt.MustBindTransient(&testStruct{}, nil)
 	})
 
-	t.Run("bind transient non function resolver with alias", func(t *testing.T) {
+	t.Run("bind transient non function with alias", func(t *testing.T) {
 		defer checkMustPanic(t)
 
 		cnt := CreateContainer()
